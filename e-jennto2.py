@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
-# シミュレーションパラメータの定義
+# シミュレーションパラメータの定義.
 WIDTH = 50.0                  # 空間の幅
 HEIGHT = 50.0                 # 空間の高さ
 
