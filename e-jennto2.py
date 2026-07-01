@@ -4,8 +4,8 @@ import matplotlib.animation as animation
 import matplotlib.patches as patches
 
 # シミュレーションパラメータの定義
-WIDTH = 100.0                  # 空間の幅
-HEIGHT = 100.0                 # 空間の高さ
+WIDTH = 50.0                  # 空間の幅
+HEIGHT = 50.0                 # 空間の高さ
 
 # ★★★ エージェント総数：1000個 ★★★
 AGENTS_NUMBER = 1000       
