@@ -1,10 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+import matplotlib.patches as patches
 
-# シミュレーションパラメータの定義.
-WIDTH = 50.0                  # 空間の幅
-HEIGHT = 50.0                 # 空間の高さ
+# シミュレーションパラメータの定義
+WIDTH = 100.0                  # 空間の幅
+HEIGHT = 100.0                 # 空間の高さ
 
 # ★★★ エージェント総数：1000個 ★★★
 AGENTS_NUMBER = 1000       
@@ -20,7 +21,7 @@ WIND_ROUTE_WIDTH = 6.0        # 風の通り道の太さ（中心線からの許
 OXYGEN = 0   # 酸素
 CO2 = 1      # 二酸化炭素
 
-# ★★★ 開口部（窓・ドア）の座標の範囲（ここを自由に変えても連動します） ★★★
+# ★★★ 開口部（窓・ドア）の座標の範囲 ★★★
 LEFT_WINDOW = (4.0, 12.0)    # 左側の窓の位置
 RIGHT_DOOR = (8.0, 16.0)      # 右側のドアの位置
 
@@ -31,6 +32,14 @@ door_center = np.array([WIDTH, (RIGHT_DOOR[0] + RIGHT_DOOR[1]) / 2.0])
 # 【自動計算】窓からドアへの風の方向ベクトル（単位ベクトル）
 wind_dir = door_center - window_center
 wind_dir = wind_dir / np.linalg.norm(wind_dir)  # 正規化
+
+# ★★★ 机と椅子の配置（16個） ★★★
+desks = []
+# 4x4のグリッド状に16個配置する
+for x_c in np.linspace(10, 40, 4):
+    for y_c in np.linspace(10, 40, 4):
+        # 1つの机のサイズを6x6とし、中心座標から範囲を定義 (x_min, x_max, y_min, y_max)
+        desks.append((x_c - 3, x_c + 3, y_c - 3, y_c + 3))
 
 # 初期配置と状態の初期化
 pos = np.random.rand(AGENTS_NUMBER, 2) * [WIDTH, HEIGHT]
@@ -64,6 +73,12 @@ ax1.text(WIDTH+1, door_center[1], 'Door', fontsize=10, color='brown', weight='bo
 ax1.plot([0, WIDTH], [0, 0], color='black', linewidth=3)
 ax1.plot([0, WIDTH], [HEIGHT, HEIGHT], color='black', linewidth=3)
 
+# 机のプロット
+for (x_min, x_max, y_min, y_max) in desks:
+    rect = patches.Rectangle((x_min, y_min), x_max - x_min, y_max - y_min, 
+                             linewidth=1, edgecolor='saddlebrown', facecolor='wheat', alpha=0.6)
+    ax1.add_patch(rect)
+
 # 右側：分子の個数・割合推移グラフ
 ax2.set_xlim(0, SIMULATION_TIME)
 ax2.set_ylim(0, AGENTS_NUMBER) 
@@ -84,19 +99,13 @@ ax2_twin.set_ylabel('Percentage (%)')
 def animate(frame):
     global pos, states
     
-    # ★★★ 新しい風の通り道判定（点と直線の距離を利用） ★★★
-    # 窓の中心から各エージェントへのベクトル
+    # 風の通り道判定（点と直線の距離を利用）
     v_agent = pos - window_center
-    # 風の方向ベクトルに対する投影（中心線に沿った進捗度）
     proj_len = np.dot(v_agent, wind_dir)
-    # 中心線からエージェントまでの最短距離（垂直距離）を計算
     closest_points = window_center + np.outer(proj_len, wind_dir)
     dist_from_route = np.linalg.norm(pos - closest_points, axis=1)
     
-    # 風の通り道のエリア（中心線から指定幅以内）
     in_wind_route = dist_from_route <= WIND_ROUTE_WIDTH
-    
-    # 確率判定
     is_affected = np.random.rand(AGENTS_NUMBER) < WIND_PROBABILITY
     wind_mask = in_wind_route & is_affected
     
@@ -105,12 +114,27 @@ def animate(frame):
     dx = AGENT_SPEED * np.cos(angles)
     dy = AGENT_SPEED * np.sin(angles)
     
-    # ★★★ 窓からドアへの方向ベクトルを風の速度に適用 ★★★
+    # 窓からドアへの方向ベクトルを風の速度に適用
     dx[wind_mask] = WIND_SPEED * wind_dir[0]
     dy[wind_mask] = WIND_SPEED * wind_dir[1]
     
-    pos[:, 0] += dx
-    pos[:, 1] += dy
+    # 移動予定の座標を計算
+    new_x = pos[:, 0] + dx
+    new_y = pos[:, 1] + dy
+    
+    # ★★★ 机と椅子との当たり判定（透過確率の実装） ★★★
+    in_desk_mask = np.zeros(AGENTS_NUMBER, dtype=bool)
+    for (x_min, x_max, y_min, y_max) in desks:
+        in_this = (new_x >= x_min) & (new_x <= x_max) & (new_y >= y_min) & (new_y <= y_max)
+        in_desk_mask |= in_this
+        
+    # 通り抜けない（ブロックされる）確率20%の判定
+    # 80%はそのまま透過するため、乱数が0.2未満の場合のみブロックとする
+    block_mask = in_desk_mask & (np.random.rand(AGENTS_NUMBER) < 0.20)
+    
+    # ブロックされなかったエージェントのみ位置を更新
+    pos[~block_mask, 0] = new_x[~block_mask]
+    pos[~block_mask, 1] = new_y[~block_mask]
     
     # 壁の判定
     pos[:, 1] = np.clip(pos[:, 1], 0, HEIGHT)
@@ -157,5 +181,5 @@ def animate(frame):
 
 ani = animation.FuncAnimation(fig, animate, frames=SIMULATION_TIME, blit=True, repeat=False)
 plt.tight_layout()
-print("窓とドアの位置に追従する風向シミュレーションを表示します...")
+print("窓とドアの位置に追従する風向・障害物シミュレーションを表示します...")
 plt.show()
